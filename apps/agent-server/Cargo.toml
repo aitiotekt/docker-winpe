@@ -1,0 +1,8 @@
+[package]
+name = "winpe-agent-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+winpe-agent-core = { path = "../../packages/agent-core" }
+serde_json = { workspace = true }

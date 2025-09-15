@@ -1,0 +1,9 @@
+{
+    "recommendations": [
+        "hverlin.mise-vscode",
+        "zerotaskx.rust-extension-pack",
+        "rust-lang.rust-analyzer",
+        "ms-azuretools.vscode-docker",
+        "skellock.just"
+    ]
+}
