@@ -1,4 +1,4 @@
-# Docker Tiny WinPE
+# Docker WinPE
 
 [中文说明](README_zh.md)
 
@@ -23,10 +23,8 @@ just install-winpe-deps
 ## Build WinPE ISO
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-winpe-iso.ps1 -Arch amd64 -AgentServerPath build/winpe-agent-server.exe -OutputIsoPath build/winpe.iso -Clean
+just build-winpe-iso
 ```
-
-If `build/winpe-agent-server.exe` is missing, the ISO is still built without it.
 
 ## Build Docker image
 

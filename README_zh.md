@@ -1,4 +1,4 @@
-# Docker Tiny WinPE
+# Docker WinPE
 
 [English](README.md)
 
