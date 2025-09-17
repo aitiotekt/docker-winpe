@@ -14,5 +14,5 @@ if ($FoundWinPEAddon) {
 }
 else {
     Write-Host "Microsoft.WindowsADK.WinPEAddon not found, installing from GitHub"
-    Install-WinPEAddonFromGitHub
+    Install-WinPEAddonFromManifest
 }

@@ -10,7 +10,7 @@
 
 ## 依赖（构建 ISO）
 
-- Windows 10/11 主机
+- Windows 10/11/Server2025 主机
 - Windows ADK + WinPE Add-on
 - PowerShell 7+
 

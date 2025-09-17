@@ -10,7 +10,7 @@ Note: This project is in a prototype phase and is not yet stable.
 
 ## Requirements (ISO build)
 
-- Windows 10/11 host
+- Windows 10/11/Server2025 host
 - Windows ADK + WinPE Add-on
 - PowerShell 7+
 
