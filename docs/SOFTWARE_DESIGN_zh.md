@@ -6,31 +6,27 @@
 
 - 最小化：只包含最基本的组件，不包含任何不必要的软件
 - 目标：用于在 SteamOS、MacOS 和其他 Linux 中执行包括 chkdsk 等命令在内高度依赖 NT 内核的工具
-- 无头：支持远程 Agent 命令执行、或者在终端中运行 curses 模拟显示
+- 无头：支持远程 Agent 命令执行
 
 ## Agent 软件设计
 
 ### Agent 项目结构
 
 ```text
-docker-tiny-winpe/
+docker-winpe/
 ├── apps/
 │   ├── agent-client/
-│   ├── agent-bridge/
 │   └── agent-server/
 ├── packages/
 │   └── agent-core/
 ```
 
 - `agent-server`: 服务端，提供 Agent 服务
-    - 位于 Docker 容器中 qemu 运行的 Windows PE 中，用来接收远程命令并执行
-    - 基于 COM 串口进行通信，无需注入任何驱动
-- `agent-bridge`: 桥接层，提供 Agent 桥接
-    - 位于 Docker 容器中，用来将 Agent 服务和客户端连接起来
-    - 提供串口和 HTTP 的转换
+    - 位于 Docker 容器中 qemu 运行的 Windows PE 中
+    - 监听 8080 HTTP 端口，接收 JSON RPC 请求并执行命令
 - `agent-client`: 客户端，提供 Agent 界面
-    - 位于 Docker 容器外，用来发送命令到 Agent 服务并获取结果展示给用户
-    - 基于 HTTP 进行通信
+    - 位于 Docker 容器外
+    - 用来发送命令到 Agent 服务并获取结果展示给用户，提供命令行参数解析、结果展示等功能
 - `agent-core`: 核心库
     - 提供通用的 Agent 共享功能，如日志、错误处理、配置等
 
@@ -47,13 +43,13 @@ docker-tiny-winpe/
 }
 ```
 
+## 构建 WinPE ISO
+
+基于 Windows ADK 构建一个基于 Windows 11 PE 25H2 的 Tiny WinPE 的镜像，使用 `scripts/build-winpe-iso.ps1` 脚本进行构建，需要注入所需的 `winpe-agent-server` 并后台开机运行。
+
 ## 构建 Docker 镜像
 
 使用 `Dockerfile` 构建 Docker 镜像。
-
-## 构建 Tiny WinPE ISO
-
-基于 Windows ADK 构建一个基于 Windows 11 PE 25H2 的 Tiny WinPE 的镜像，使用 `scripts/build-winpe.ps1` 脚本进行构建，需要注入所需的 `agent-server` 并后台开机运行。
 
 ## 案例
 

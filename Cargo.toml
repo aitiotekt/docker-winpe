@@ -1,11 +1,6 @@
 
 [workspace]
-members = [
-    "packages/agent-core",
-    "apps/agent-client",
-    "apps/agent-server",
-    "apps/agent-bridge",
-]
+members = ["packages/agent-core", "apps/agent-client", "apps/agent-server"]
 resolver = "3"
 
 [workspace.dependencies]

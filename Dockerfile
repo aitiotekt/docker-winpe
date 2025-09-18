@@ -1,18 +1,12 @@
 FROM archlinux:base
 
-RUN pacman -Syu --noconfirm qemu-system-x86 qemu-ui-curses && \
-    pacman -Scc --noconfirm
+RUN pacman -Syu --noconfirm \
+    qemu-system-x86 \
+    bash \
+    coreutils \
+    && pacman -Scc --noconfirm
 
-COPY build/winpe.iso /boot/winpe.iso
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-ENTRYPOINT [ \
-    "qemu-system-x86_64", \
-    "--enable-kvm", \
-    "-m", "2G", \
-    "-smp", "2", \
-    "-cdrom", "/boot/winpe.iso", \
-    "-serial", "unix:/tmp/qemu-agent.sock,server,nowait", \
-    "-display", "curses", \
-    "-boot", "d" ]
-
-CMD []
+ENTRYPOINT [ "/entrypoint.sh" ]

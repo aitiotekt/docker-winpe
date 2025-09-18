@@ -1,3 +1,5 @@
 /target
 /build/*
 !/build/.gitkeep
+/resources/virtio-win/*
+!/resources/virtio-win/.gitkeep

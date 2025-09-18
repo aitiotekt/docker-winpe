@@ -29,18 +29,18 @@ just build-winpe-iso
 ## 构建 Docker 镜像
 
 ```bash
-docker build -t docker-tiny-winpe .
+docker build -t docker-winpe .
 ```
 
 ## 运行
 
 ```bash
-docker run -it --rm --privileged --device /dev/mmcblk0p1 -e DEVICE=/dev/mmcblk0p1 docker-tiny-winpe:latest
+docker run -it --rm --privileged --device /dev/mmcblk0p1 -e DEVICE=/dev/mmcblk0p1 docker-winpe:latest
 ```
 
 JSON-RPC 示例：
 
 ```bash
-docker run -d --privileged --device /dev/mmcblk0p1 -e DEVICE=/dev/mmcblk0p1 docker-tiny-winpe:latest
+docker run -d --privileged --device /dev/mmcblk0p1 -e DEVICE=/dev/mmcblk0p1 docker-winpe:latest
 curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "cmd", "params": ["/c", "chkdsk", "D:", "/r"], "id": 1}' http://localhost:8080/jsonrpc
 ```

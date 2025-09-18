@@ -1,0 +1,16 @@
+services:
+  winpe:
+    build: .
+    container_name: docker-winpe
+    devices:
+      # QEMU KVM acceleration must map /dev/kvm
+      - /dev/kvm:/dev/kvm
+      # target disk like /dev/nvme0n1p4
+      # - ${DISK2:?set DISK2 like /dev/nvme0n1p4}:/disk2
+      # if you need more disks, uncomment and set DISK3
+      # - ${DISK3:?set DISK3}:/disk3
+    environment:
+      # QEMU_MEM: "2G"
+      # QEMU_SMP: "2"
+      # HOST_FWD_PORT: "8080"
+      # QEMU_MAC: "52:54:00:12:34:56"
