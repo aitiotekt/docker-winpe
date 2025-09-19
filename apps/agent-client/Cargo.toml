@@ -6,3 +6,24 @@ edition = "2024"
 [dependencies]
 winpe-agent-core = { path = "../../packages/agent-core" }
 serde_json = { workspace = true }
+serde = { workspace = true }
+
+# CLI framework
+clap = { version = "4", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"] }
+
+# WebSocket client
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+
+# TUI rendering (optional, for tui mode)
+crossterm = "0.28"
+ratatui = "0.29"
+
+# Browser opening
+open = "5"

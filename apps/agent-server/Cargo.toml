@@ -6,3 +6,37 @@ edition = "2024"
 [dependencies]
 winpe-agent-core = { path = "../../packages/agent-core" }
 serde_json = { workspace = true }
+serde = { workspace = true }
+
+# Axum web framework
+axum = { version = "0.8", features = ["ws", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "trace", "cors"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Session management
+dashmap = "6"
+ulid = "1"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Async utilities
+futures = "0.3"
+tokio-stream = "0.1"
+async-stream = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+    "Win32_System_Pipes",
+    "Win32_System_IO",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_JobObjects",
+] }

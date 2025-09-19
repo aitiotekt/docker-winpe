@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinPE Agent Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header class="toolbar">
+            <h1>WinPE Agent</h1>
+            <div class="controls">
+                <select id="shell-select">
+                    <option value="cmd">cmd.exe</option>
+                    <option value="powershell">PowerShell</option>
+                </select>
+                <button id="connect-btn" class="btn btn-primary">Connect</button>
+                <button id="disconnect-btn" class="btn btn-danger" disabled>Disconnect</button>
+            </div>
+        </header>
+        <main id="terminal-container"></main>
+        <footer class="status-bar">
+            <span id="status">Disconnected</span>
+            <span id="session-id"></span>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

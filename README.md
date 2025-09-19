@@ -29,18 +29,5 @@ just build-winpe-iso
 ## Build Docker image
 
 ```bash
-docker build -t docker-tiny-winpe .
-```
-
-## Run
-
-```bash
-docker run -it --rm --privileged --device /dev/mmcblk0p1 -e DEVICE=/dev/mmcblk0p1 docker-tiny-winpe:latest
-```
-
-JSON-RPC example:
-
-```bash
-docker run -d --privileged --device /dev/mmcblk0p1 -e DEVICE=/dev/mmcblk0p1 docker-tiny-winpe:latest
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0", "method": "cmd", "params": ["/c", "chkdsk", "D:", "/r"], "id": 1}' http://localhost:8080/jsonrpc
+docker build -t docker-winpe .
 ```

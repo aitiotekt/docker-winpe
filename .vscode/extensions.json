@@ -4,6 +4,8 @@
         "zerotaskx.rust-extension-pack",
         "rust-lang.rust-analyzer",
         "ms-azuretools.vscode-docker",
-        "skellock.just"
+        "skellock.just",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml"
     ]
 }

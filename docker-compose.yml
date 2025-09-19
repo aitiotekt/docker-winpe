@@ -9,8 +9,10 @@ services:
       # - ${DISK2:?set DISK2 like /dev/nvme0n1p4}:/disk2
       # if you need more disks, uncomment and set DISK3
       # - ${DISK3:?set DISK3}:/disk3
+    ports:
+      - "8080:8080"
     environment:
-      # QEMU_MEM: "2G"
-      # QEMU_SMP: "2"
-      # HOST_FWD_PORT: "8080"
+      QEMU_MEM: "2G"
+      QEMU_SMP: "2"
+      HOST_FWD_PORT: "8080"
       # QEMU_MAC: "52:54:00:12:34:56"

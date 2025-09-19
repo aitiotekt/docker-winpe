@@ -45,7 +45,7 @@ else {
 
 if (-not (Test-Path -LiteralPath $AdkRoot)) {
     Write-Host "==> Stage: Microsoft.WindowsADK not found, installing with winget"
-    Install-WinGetPackage -Id Microsoft.WindowsADK -Architecture $Arch
+    Install-WinGetPackage -Id Microsoft.WindowsADK
 }
 else {
     Write-Host "==> Stage: Microsoft.WindowsADK already installed"
@@ -53,7 +53,7 @@ else {
 
 if (-not (Test-Path -LiteralPath $WinPEAddonRoot)) {
     Write-Host "==> Stage: Microsoft.WindowsADK.WinPEAddon not found, installing with winget"
-    Install-WinGetPackage -Id Microsoft.WindowsADK.WinPEAddon -Architecture $Arch
+    Install-WinGetPackage -Id Microsoft.WindowsADK.WinPEAddon
 }
 else {
     Write-Host "==> Stage: Microsoft.WindowsADK.WinPEAddon already installed"

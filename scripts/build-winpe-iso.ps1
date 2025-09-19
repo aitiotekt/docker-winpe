@@ -77,8 +77,8 @@ function Reset-WindowsImage {
 
 
     $MountedImage = @(Get-WindowsImage -Mounted | Where-Object { 
-        ((Resolve-Path -Path $_.ImagePath).Path -eq (Resolve-Path -Path $ImagePath).Path) -and ($_.ImageIndex -eq $Index) 
-    })
+            ((Resolve-Path -Path $_.ImagePath).Path -eq (Resolve-Path -Path $ImagePath).Path) -and ($_.ImageIndex -eq $Index) 
+        })
     if ($MountedImage.Length -gt 0) {
         Dismount-WindowsImage -Path $Path -Discard
     }
@@ -96,9 +96,11 @@ $KitsRoot = Get-KitsRoot
 $AdkRoot = if ($AdkRoot) { $AdkRoot } else { Join-Path $KitsRoot "Assessment and Deployment Kit" }
 $WorkingDir = if ($WorkingDir) { $WorkingDir } else { Join-Path $ProjectRoot "build\winpe" }
 $OutputIsoPath = if ($OutputIsoPath) { $OutputIsoPath } else { Join-Path $ProjectRoot "build\winpe.iso" }
-$OutputIsoPath = Resolve-Path $OutputIsoPath
+# Use GetFullPath instead of Resolve-Path since the file may not exist yet
+$OutputIsoPath = [System.IO.Path]::GetFullPath($OutputIsoPath)
 $Clean = if ($Clean) { $Clean } else { $false }
 $AgentServerPath = if ($AgentServerPath) { $AgentServerPath } else { Join-Path $ProjectRoot "build\winpe-agent-server.exe" }
+$UiSourcePath = Join-Path $ProjectRoot "apps\agent-server\ui"
 $StartupScriptPath = Join-Path $ProjectRoot "scripts\startup.ps1"
 
 $WinPERoot = Join-Path $AdkRoot "Windows Preinstallation Environment"
@@ -203,6 +205,14 @@ Add-WindowsDriver -Path $WinPEMountPath -Driver $VirtioViostorDriverPath -ForceU
 Write-Host "==> Stage: Copy agent server to WinPE image"
 New-Item -ItemType Directory -Path "$WinPEMountPath\agent" -Force | Out-Null
 Copy-Item -LiteralPath $AgentServerPath -Destination "$WinPEMountPath\agent\winpe-agent-server.exe" -Force
+
+Write-Host "==> Stage: Copy UI static files to WinPE image"
+if (Test-Path -LiteralPath $UiSourcePath) {
+    Copy-Item -LiteralPath $UiSourcePath -Destination "$WinPEMountPath\agent\ui" -Recurse -Force
+}
+else {
+    Write-Warning "UI source path not found: $UiSourcePath, skipping UI copy"
+}
 
 Write-Host "==> Stage: Copy startup.ps1 to WinPE image"
 Copy-Item -LiteralPath $StartupScriptPath -Destination $StartupScriptMountPath -Force
