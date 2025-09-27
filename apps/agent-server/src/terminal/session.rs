@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use ulid::Ulid;
 use winpe_agent_core::{
     SessionCreateRequest, SessionCreateResponse, SessionInfo, SessionState, Shell, Signal,
@@ -105,8 +105,8 @@ pub struct Session {
 
     /// Channel to send input to the session.
     pub input_tx: mpsc::Sender<Vec<u8>>,
-    /// Channel to receive output from the session.
-    pub output_rx: Option<mpsc::Receiver<Vec<u8>>>,
+    /// Broadcast channel for output - allows multiple subscribers for reconnection.
+    pub output_tx: broadcast::Sender<Vec<u8>>,
 }
 
 // Ensure Session is Send + Sync
@@ -275,7 +275,8 @@ impl SessionManager {
 
         // Create channels for I/O
         let (input_tx, mut input_rx) = mpsc::channel::<Vec<u8>>(100);
-        let (output_tx, output_rx) = mpsc::channel::<Vec<u8>>(100);
+        // Use broadcast for output to support reconnection
+        let (output_tx, _) = broadcast::channel::<Vec<u8>>(256);
 
         // Wrap handles for Send (convert to usize)
         let input_handle = SendHandle::from_handle(input_write);
@@ -293,6 +294,7 @@ impl SessionManager {
         });
 
         // Spawn output reader task using std::thread
+        let output_tx_clone = output_tx.clone();
         std::thread::spawn(move || {
             use std::io::Read;
             let mut file = unsafe { std::fs::File::from_raw_handle(output_handle.as_handle()) };
@@ -301,9 +303,8 @@ impl SessionManager {
                 match file.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(n) => {
-                        if output_tx.blocking_send(buffer[..n].to_vec()).is_err() {
-                            break;
-                        }
+                        // Ignore send errors - no subscribers is OK
+                        let _ = output_tx_clone.send(buffer[..n].to_vec());
                     }
                     Err(_) => break,
                 }
@@ -337,7 +338,7 @@ impl SessionManager {
             process_handle,
             pty,
             input_tx,
-            output_rx: Some(output_rx),
+            output_tx,
         };
 
         self.sessions

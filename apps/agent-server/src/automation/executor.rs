@@ -28,6 +28,8 @@ pub enum StreamEvent {
     Stderr(String),
     /// Process exited with code.
     Exit(i32),
+    /// Process was killed due to timeout.
+    Timeout,
 }
 
 /// Execute a command and return captured output.
@@ -39,11 +41,12 @@ pub async fn execute_command(req: &ExecRequest) -> Result<(i32, String, String),
         let args = req.args.clone();
         let shell = req.shell;
         let cwd = req.cwd.clone();
+        let env = req.env.clone();
         let timeout_ms = req.timeout_ms;
 
         // Run all Windows operations in a blocking task
         tokio::task::spawn_blocking(move || {
-            execute_command_sync(&command, &args, shell, cwd.as_deref(), timeout_ms)
+            execute_command_sync(&command, &args, shell, cwd.as_deref(), &env, timeout_ms)
         })
         .await
         .map_err(|e| ExecError::ProcessCreationFailed(format!("Task join error: {}", e)))?
@@ -80,6 +83,7 @@ fn execute_command_sync(
     args: &[String],
     shell: Shell,
     cwd: Option<&str>,
+    env: &std::collections::HashMap<String, String>,
     timeout_ms: u64,
 ) -> Result<(i32, String, String), ExecError> {
     use std::ffi::OsStr;
@@ -92,6 +96,61 @@ fn execute_command_sync(
     use windows_sys::Win32::Security::*;
     use windows_sys::Win32::System::Pipes::*;
     use windows_sys::Win32::System::Threading::*;
+
+    // Job Objects FFI definitions (not always available in windows-sys)
+    const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x00002000;
+    const JOB_OBJECT_EXTENDED_LIMIT_INFORMATION: i32 = 9;
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct JOBOBJECT_BASIC_LIMIT_INFORMATION {
+        per_process_user_time_limit: i64,
+        per_job_user_time_limit: i64,
+        limit_flags: u32,
+        minimum_working_set_size: usize,
+        maximum_working_set_size: usize,
+        active_process_limit: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct IO_COUNTERS {
+        read_operation_count: u64,
+        write_operation_count: u64,
+        other_operation_count: u64,
+        read_transfer_count: u64,
+        write_transfer_count: u64,
+        other_transfer_count: u64,
+    }
+
+    #[repr(C)]
+    struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION {
+        basic_limit_information: JOBOBJECT_BASIC_LIMIT_INFORMATION,
+        io_info: IO_COUNTERS,
+        process_memory_limit: usize,
+        job_memory_limit: usize,
+        peak_process_memory_used: usize,
+        peak_job_memory_used: usize,
+    }
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn CreateJobObjectW(
+            lpJobAttributes: *mut SECURITY_ATTRIBUTES,
+            lpName: *const u16,
+        ) -> HANDLE;
+        fn SetInformationJobObject(
+            hJob: HANDLE,
+            JobObjectInformationClass: i32,
+            lpJobObjectInformation: *const std::ffi::c_void,
+            cbJobObjectInformationLength: u32,
+        ) -> i32;
+        fn AssignProcessToJobObject(hJob: HANDLE, hProcess: HANDLE) -> i32;
+        fn TerminateJobObject(hJob: HANDLE, uExitCode: u32) -> i32;
+    }
 
     // Build command line
     let command_line = build_command_line(command, args, shell);
@@ -150,7 +209,11 @@ fn execute_command_sync(
     });
     let cwd_ptr = cwd_wide.as_ref().map_or(ptr::null(), |v| v.as_ptr());
 
-    // Create process
+    // Build environment block
+    let env_block = build_environment_block(env);
+    let env_ptr = env_block.as_ptr();
+
+    // Create process with environment (CREATE_UNICODE_ENVIRONMENT for wide chars)
     let result = unsafe {
         CreateProcessW(
             ptr::null(),
@@ -158,8 +221,8 @@ fn execute_command_sync(
             ptr::null_mut(),
             ptr::null_mut(),
             TRUE,
-            CREATE_NO_WINDOW,
-            ptr::null(),
+            CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+            env_ptr as *const std::ffi::c_void,
             cwd_ptr,
             &si,
             &mut pi,
@@ -185,6 +248,36 @@ fn execute_command_sync(
 
     unsafe { CloseHandle(pi.hThread) };
 
+    // Create Job Object for process tree termination
+    let job = unsafe { CreateJobObjectW(ptr::null_mut(), ptr::null()) };
+    if job.is_null() || job == INVALID_HANDLE_VALUE {
+        // Job creation failed, fallback to simple process termination
+        tracing::warn!("Failed to create Job Object, process tree termination disabled");
+    } else {
+        // Configure job to terminate child processes when job is closed
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        info.basic_limit_information.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+        let set_result = unsafe {
+            SetInformationJobObject(
+                job,
+                JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                &info as *const _ as *const std::ffi::c_void,
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+        };
+
+        if set_result == 0 {
+            tracing::warn!("Failed to configure Job Object limits");
+        }
+
+        // Assign process to job
+        let assign_result = unsafe { AssignProcessToJobObject(job, pi.hProcess) };
+        if assign_result == 0 {
+            tracing::warn!("Failed to assign process to Job Object");
+        }
+    }
+
     // Wait for process with timeout (blocking)
     let timeout = Duration::from_millis(timeout_ms);
     let start = Instant::now();
@@ -195,14 +288,29 @@ fn execute_command_sync(
             break;
         }
         if start.elapsed() > timeout {
+            // Terminate job (kills entire process tree) or fallback to process
+            if !job.is_null() && job != INVALID_HANDLE_VALUE {
+                unsafe {
+                    TerminateJobObject(job, 1);
+                    CloseHandle(job);
+                }
+            } else {
+                unsafe {
+                    TerminateProcess(pi.hProcess, 1);
+                }
+            }
             unsafe {
-                TerminateProcess(pi.hProcess, 1);
                 CloseHandle(pi.hProcess);
                 CloseHandle(stdout_read);
                 CloseHandle(stderr_read);
             }
             return Err(ExecError::Timeout);
         }
+    }
+
+    // Clean up job object
+    if !job.is_null() && job != INVALID_HANDLE_VALUE {
+        unsafe { CloseHandle(job) };
     }
 
     // Get exit code
@@ -299,7 +407,11 @@ async fn execute_command_stream_windows(
     });
     let cwd_ptr = cwd_wide.as_ref().map_or(ptr::null(), |v| v.as_ptr());
 
-    // Create process
+    // Build environment block
+    let env_block = build_environment_block(&req.env);
+    let env_ptr = env_block.as_ptr();
+
+    // Create process with environment
     let result = unsafe {
         CreateProcessW(
             ptr::null(),
@@ -307,8 +419,8 @@ async fn execute_command_stream_windows(
             ptr::null_mut(),
             ptr::null_mut(),
             TRUE,
-            CREATE_NO_WINDOW,
-            ptr::null(),
+            CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+            env_ptr as *const std::ffi::c_void,
             cwd_ptr,
             &si,
             &mut pi,
@@ -356,6 +468,7 @@ async fn execute_command_stream_windows(
         let timeout = Duration::from_millis(timeout_ms);
         let start = std::time::Instant::now();
         let handle = process_handle as HANDLE;
+        let mut timed_out = false;
 
         loop {
             let result = unsafe { WaitForSingleObject(handle, 100) };
@@ -366,19 +479,26 @@ async fn execute_command_stream_windows(
                 unsafe {
                     TerminateProcess(handle, 1);
                 }
+                timed_out = true;
                 break;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
 
-        // Get exit code
-        let mut exit_code: u32 = 0;
         unsafe {
-            GetExitCodeProcess(handle, &mut exit_code);
             CloseHandle(handle);
         }
 
-        let _ = tx.blocking_send(StreamEvent::Exit(exit_code as i32));
+        // Send appropriate event based on whether we timed out
+        if timed_out {
+            let _ = tx.blocking_send(StreamEvent::Timeout);
+        } else {
+            let mut exit_code: u32 = 0;
+            unsafe {
+                GetExitCodeProcess(handle, &mut exit_code);
+            }
+            let _ = tx.blocking_send(StreamEvent::Exit(exit_code as i32));
+        }
     });
 
     Ok(rx)
@@ -448,4 +568,39 @@ fn build_command_line(command: &str, args: &[String], shell: Shell) -> String {
             cmd
         }
     }
+}
+
+/// Build environment block for CreateProcessW.
+/// The block is a null-terminated sequence of null-terminated "KEY=VALUE" strings.
+#[cfg(windows)]
+fn build_environment_block(extra_env: &std::collections::HashMap<String, String>) -> Vec<u16> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    let mut env_strings: Vec<String> = Vec::new();
+
+    // Inherit current environment
+    for (key, value) in std::env::vars() {
+        env_strings.push(format!("{}={}", key, value));
+    }
+
+    // Add/override with request environment
+    for (key, value) in extra_env {
+        // Remove any existing entry with this key
+        env_strings.retain(|s| !s.starts_with(&format!("{}=", key)));
+        env_strings.push(format!("{}={}", key, value));
+    }
+
+    // Sort for consistency (optional but nice)
+    env_strings.sort();
+
+    // Build the block: each string null-terminated, then double null at end
+    let mut block: Vec<u16> = Vec::new();
+    for s in env_strings {
+        block.extend(OsStr::new(&s).encode_wide());
+        block.push(0); // null terminator for this string
+    }
+    block.push(0); // final null terminator
+
+    block
 }

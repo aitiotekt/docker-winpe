@@ -2,19 +2,35 @@
 
 This document lists known improvements that have not yet been implemented.
 
+## Completed ✅
+
+### ~~Terminal session reconnection issue~~
+
+**Status**: Fixed
+
+Use `tokio::sync::broadcast` instead of `mpsc` for output channel, supporting multiple `subscribe()` calls for reconnection after disconnect.
+
+### ~~Environment variables not applied~~
+
+**Status**: Fixed
+
+Added `build_environment_block()` function to pass `CREATE_UNICODE_ENVIRONMENT` flag in `CreateProcessW`.
+
+### ~~exec_stream timeout event~~
+
+**Status**: Fixed
+
+Added `StreamEvent::Timeout` variant, SSE event type is `timeout`, client can distinguish timeout from normal exit.
+
+### ~~Job Objects for process tree termination~~
+
+**Status**: Fixed
+
+Use Windows Job Objects API with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` flag, terminate entire process tree on timeout.
+
+---
+
 ## High Priority
-
-### Terminal session reconnection issue
-
-**Files**: `ws.rs`, `session.rs`
-
-`output_rx` is taken with `take()` on the first WebSocket connection and not restored. When the client disconnects, `attached = false` but `output_rx` remains `None`, causing subsequent connections to fail (receiving close code 1011).
-
-**Solutions**:
-
-- Use `tokio::sync::broadcast` instead of `mpsc` for output
-- Or recreate the output channel on disconnect
-- Or use `Arc<Mutex<Option<Receiver>>>` pattern to allow recovery
 
 ### xterm.js CDN dependency
 
@@ -28,18 +44,9 @@ Web UI relies on CDN to load xterm.js, which won't work in offline WinPE environ
 2. Modify `index.html` to use local paths
 3. Ensure `build-winpe-iso.ps1` includes `ui/` directory (already done)
 
+---
+
 ## Medium Priority
-
-### Environment variables not applied
-
-**Files**: `executor.rs` (lines 154, 303), `session.rs` (line 264)
-
-The `env` field in API requests is completely ignored, `NULL` is passed for the environment parameter of `CreateProcessW`.
-
-**Solutions**:
-
-- Build environment block (array of "KEY=VALUE" strings separated by null)
-- Pass to the `lpEnvironment` parameter of `CreateProcessW`
 
 ### stdout/stderr output limit
 
@@ -50,22 +57,13 @@ The `env` field in API requests is completely ignored, `NULL` is passed for the 
 **Solutions**:
 
 - Add 16-64 MiB upper bound
-- When exceeding the limit, stop reading and mark it as truncated
+- When exceeding limit, stop reading and mark as truncated
 
-### exec_stream timeout event
-
-**File**: `executor.rs` (line 354)
-
-When stream execution times out, only `Exit` event is sent, client cannot distinguish normal exit from timeout.
-
-**Solutions**:
-
-- Add `Timeout` event type
-- Send `Timeout` event instead of `Exit` on timeout
+---
 
 ## Low Priority
 
-### Command line injection security
+### Command line injection security (skipped for now)
 
 **File**: `executor.rs` (line 418)
 
@@ -75,15 +73,3 @@ When stream execution times out, only `Exit` event is sent, client cannot distin
 
 - Implement complete Windows command line escaping logic
 - Consider using the inverse operation of `CommandLineToArgvW`
-
-### Job Objects for process tree termination
-
-**File**: `executor.rs`
-
-Currently uses `TerminateProcess` to terminate processes, which does not terminate child processes.
-
-**Solutions**:
-
-- Create a Job Object
-- Add process to the Job
-- Terminate the entire Job on exit

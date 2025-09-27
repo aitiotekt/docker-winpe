@@ -56,28 +56,10 @@ pub async fn handle_websocket(socket: WebSocket, manager: SessionManager, sessio
         session_guard.last_activity = chrono::Utc::now();
     }
 
-    // Take the output receiver from the session
-    let output_rx = {
-        let mut session_guard = session.write().await;
-        session_guard.output_rx.take()
-    };
-
-    let Some(mut output_rx) = output_rx else {
-        tracing::error!("Session {} output already taken", session_id);
-        // This shouldn't happen if we properly check attached flag
-        let (mut sender, _) = socket.split();
-        let _ = sender
-            .send(Message::Close(Some(CloseFrame {
-                code: 1011,
-                reason: "Output channel unavailable".into(),
-            })))
-            .await;
-        // Mark as detached since we failed
-        {
-            let mut session_guard = session.write().await;
-            session_guard.attached = false;
-        }
-        return;
+    // Subscribe to the output broadcast channel - allows reconnection
+    let mut output_rx = {
+        let session_guard = session.read().await;
+        session_guard.output_tx.subscribe()
     };
 
     let (mut ws_sender, mut ws_receiver) = socket.split();
@@ -94,9 +76,18 @@ pub async fn handle_websocket(socket: WebSocket, manager: SessionManager, sessio
 
     // Spawn task to forward output to WebSocket
     let output_task = tokio::spawn(async move {
-        while let Some(data) = output_rx.recv().await {
-            if ws_sender.send(Message::Binary(data.into())).await.is_err() {
-                break;
+        loop {
+            match output_rx.recv().await {
+                Ok(data) => {
+                    if ws_sender.send(Message::Binary(data.into())).await.is_err() {
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                    // Subscriber lagged behind, continue receiving
+                    continue;
+                }
             }
         }
         // Send normal close when output ends

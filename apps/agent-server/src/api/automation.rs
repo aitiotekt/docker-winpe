@@ -101,6 +101,14 @@ async fn exec_stream_handler(
                             yield Ok(Event::default().event("exit").data(data.to_string()));
                             break;
                         }
+                        executor::StreamEvent::Timeout => {
+                            let duration_ms = start.elapsed().as_millis() as u64;
+                            let data = serde_json::json!({
+                                "duration_ms": duration_ms
+                            });
+                            yield Ok(Event::default().event("timeout").data(data.to_string()));
+                            break;
+                        }
                     }
                 }
             }
